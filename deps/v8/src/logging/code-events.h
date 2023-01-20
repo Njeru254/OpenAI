@@ -94,11 +94,12 @@ class LogEventListener {
   virtual void CodeMovingGCEvent() = 0;
   virtual void CodeDisableOptEvent(Handle<AbstractCode> code,
                                    Handle<SharedFunctionInfo> shared) = 0;
-  virtual void CodeDeoptEvent(Handle<Code> code, DeoptimizeKind kind,
-                              Address pc, int fp_to_sp_delta) = 0;
+  virtual void CodeDeoptEvent(Handle<InstructionStream> code,
+                              DeoptimizeKind kind, Address pc,
+                              int fp_to_sp_delta) = 0;
   // These events can happen when 1. an assumption made by optimized code fails
   // or 2. a weakly embedded object dies.
-  virtual void CodeDependencyChangeEvent(Handle<Code> code,
+  virtual void CodeDependencyChangeEvent(Handle<InstructionStream> code,
                                          Handle<SharedFunctionInfo> shared,
                                          const char* reason) = 0;
   // Called during GC shortly after any weak references to code objects are
@@ -124,10 +125,6 @@ class Logger {
     if (position != listeners_.end()) return false;
     // Add the listener to the end and update the element
     listeners_.push_back(listener);
-    if (!_is_listening_to_code_events) {
-      _is_listening_to_code_events |= listener->is_listening_to_code_events();
-    }
-    DCHECK_EQ(_is_listening_to_code_events, IsListeningToCodeEvents());
     return true;
   }
   void RemoveListener(LogEventListener* listener) {
@@ -135,15 +132,13 @@ class Logger {
     auto position = std::find(listeners_.begin(), listeners_.end(), listener);
     if (position == listeners_.end()) return;
     listeners_.erase(position);
-    if (listener->is_listening_to_code_events()) {
-      _is_listening_to_code_events = IsListeningToCodeEvents();
-    }
-    DCHECK_EQ(_is_listening_to_code_events, IsListeningToCodeEvents());
   }
 
   bool is_listening_to_code_events() const {
-    DCHECK_EQ(_is_listening_to_code_events, IsListeningToCodeEvents());
-    return _is_listening_to_code_events;
+    for (auto listener : listeners_) {
+      if (listener->is_listening_to_code_events()) return true;
+    }
+    return false;
   }
 
   void CodeCreateEvent(CodeTag tag, Handle<AbstractCode> code,
@@ -241,14 +236,14 @@ class Logger {
       listener->CodeDisableOptEvent(code, shared);
     }
   }
-  void CodeDeoptEvent(Handle<Code> code, DeoptimizeKind kind, Address pc,
-                      int fp_to_sp_delta) {
+  void CodeDeoptEvent(Handle<InstructionStream> code, DeoptimizeKind kind,
+                      Address pc, int fp_to_sp_delta) {
     base::MutexGuard guard(&mutex_);
     for (auto listener : listeners_) {
       listener->CodeDeoptEvent(code, kind, pc, fp_to_sp_delta);
     }
   }
-  void CodeDependencyChangeEvent(Handle<Code> code,
+  void CodeDependencyChangeEvent(Handle<InstructionStream> code,
                                  Handle<SharedFunctionInfo> sfi,
                                  const char* reason) {
     base::MutexGuard guard(&mutex_);
@@ -264,16 +259,8 @@ class Logger {
   }
 
  private:
-  bool IsListeningToCodeEvents() const {
-    for (auto listener : listeners_) {
-      if (listener->is_listening_to_code_events()) return true;
-    }
-    return false;
-  }
-
   std::vector<LogEventListener*> listeners_;
   base::Mutex mutex_;
-  bool _is_listening_to_code_events = false;
 };
 
 }  // namespace internal

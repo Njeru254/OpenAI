@@ -80,7 +80,8 @@ namespace internal {
   F(BigIntToBoolean, 1, 1)              \
   F(BigIntToNumber, 1, 1)               \
   F(BigIntUnaryOp, 2, 1)                \
-  F(ToBigInt, 1, 1)
+  F(ToBigInt, 1, 1)                     \
+  F(ToBigIntConvertNumber, 1, 1)
 
 #define FOR_EACH_INTRINSIC_CLASSES(F, I)    \
   F(DefineClass, -1 /* >= 3 */, 1)          \
@@ -118,7 +119,8 @@ namespace internal {
   F(NotifyDeoptimized, 0, 1)              \
   F(ObserveNode, 1, 1)                    \
   F(ResolvePossiblyDirectEval, 6, 1)      \
-  F(VerifyType, 1, 1)
+  F(VerifyType, 1, 1)                     \
+  F(CheckTurboshaftTypeOf, 2, 1)
 
 #define FOR_EACH_INTRINSIC_DATE(F, I) F(DateCurrentTime, 0, 1)
 
@@ -229,6 +231,7 @@ namespace internal {
   F(BytecodeBudgetInterruptWithStackCheck_Ignition, 1, 1)  \
   F(BytecodeBudgetInterrupt_Sparkplug, 1, 1)               \
   F(BytecodeBudgetInterruptWithStackCheck_Sparkplug, 1, 1) \
+  F(BytecodeBudgetInterrupt_Maglev, 1, 1)                  \
   F(BytecodeBudgetInterruptWithStackCheck_Maglev, 1, 1)    \
   F(NewError, 2, 1)                                        \
   F(NewForeign, 0, 1)                                      \
@@ -314,6 +317,7 @@ namespace internal {
   F(GetDerivedMap, 2, 1)                                               \
   F(GetFunctionName, 1, 1)                                             \
   F(GetOwnPropertyDescriptor, 2, 1)                                    \
+  F(GetOwnPropertyDescriptorObject, 2, 1)                              \
   F(GetOwnPropertyKeys, 2, 1)                                          \
   F(GetProperty, -1 /* [2, 3] */, 1)                                   \
   F(HasFastPackedElements, 1, 1)                                       \
@@ -411,7 +415,7 @@ namespace internal {
   F(RegExpExecTreatMatchAtEndAsFailure, 4, 1)                    \
   F(RegExpExperimentalOneshotExec, 4, 1)                         \
   F(RegExpExperimentalOneshotExecTreatMatchAtEndAsFailure, 4, 1) \
-  F(RegExpExecMultiple, 4, 1)                                    \
+  F(RegExpExecMultiple, 3, 1)                                    \
   F(RegExpInitializeAndCompile, 3, 1)                            \
   F(RegExpReplaceRT, 3, 1)                                       \
   F(RegExpSplit, 3, 1)                                           \
@@ -445,7 +449,8 @@ namespace internal {
 
 #define FOR_EACH_INTRINSIC_SHADOW_REALM(F, I) \
   F(ShadowRealmWrappedFunctionCreate, 2, 1)   \
-  F(ShadowRealmImportValue, 1, 1)
+  F(ShadowRealmImportValue, 1, 1)             \
+  F(ShadowRealmThrow, 2, 1)
 
 #define FOR_EACH_INTRINSIC_STRINGS(F, I)  \
   F(FlattenString, 1, 1)                  \
@@ -458,13 +463,15 @@ namespace internal {
   F(StringEscapeQuotes, 1, 1)             \
   F(StringGreaterThan, 2, 1)              \
   F(StringGreaterThanOrEqual, 2, 1)       \
+  F(StringIsWellFormed, 1, 1)             \
   F(StringLastIndexOf, 2, 1)              \
   F(StringLessThan, 2, 1)                 \
   F(StringLessThanOrEqual, 2, 1)          \
   F(StringMaxLength, 0, 1)                \
   F(StringReplaceOneCharWithString, 3, 1) \
   F(StringSubstring, 3, 1)                \
-  F(StringToArray, 2, 1)
+  F(StringToArray, 2, 1)                  \
+  F(StringToWellFormed, 1, 1)
 
 #define FOR_EACH_INTRINSIC_SYMBOL(F, I)    \
   F(CreatePrivateNameSymbol, 1, 1)         \
@@ -619,7 +626,7 @@ namespace internal {
   F(WasmTableCopy, 6, 1)              \
   F(WasmTableGrow, 3, 1)              \
   F(WasmTableFill, 5, 1)              \
-  F(WasmJSToWasmObject, 3, 1)         \
+  F(WasmJSToWasmObject, 2, 1)         \
   F(WasmCompileLazy, 2, 1)            \
   F(WasmAllocateFeedbackVector, 3, 1) \
   F(WasmCompileWrapper, 2, 1)         \
@@ -647,6 +654,7 @@ namespace internal {
 #define FOR_EACH_INTRINSIC_WASM_TEST(F, I) \
   F(DeserializeWasmModule, 2, 1)           \
   F(DisallowWasmCodegen, 1, 1)             \
+  F(FlushWasmCode, 0, 1)                   \
   F(FreezeWasmLazyCompilation, 1, 1)       \
   F(GetWasmExceptionTagId, 2, 1)           \
   F(GetWasmExceptionValues, 1, 1)          \
@@ -654,17 +662,19 @@ namespace internal {
   F(IsAsmWasmCode, 1, 1)                   \
   F(IsLiftoffFunction, 1, 1)               \
   F(IsTurboFanFunction, 1, 1)              \
+  F(IsWasmDebugFunction, 1, 1)             \
+  F(IsUncompiledWasmFunction, 1, 1)        \
   F(IsThreadInWasm, 0, 1)                  \
   F(IsWasmCode, 1, 1)                      \
   F(IsWasmTrapHandlerEnabled, 0, 1)        \
   F(SerializeWasmModule, 1, 1)             \
   F(SetWasmCompileControls, 2, 1)          \
   F(SetWasmInstantiateControls, 0, 1)      \
+  F(SetWasmGCEnabled, 1, 1)                \
   F(WasmGetNumberOfInstances, 1, 1)        \
   F(WasmNumCodeSpaces, 1, 1)               \
-  F(WasmTierDown, 0, 1)                    \
-  F(WasmTierUp, 0, 1)                      \
-  F(WasmTierUpFunction, 2, 1)              \
+  F(WasmEnterDebugging, 0, 1)              \
+  F(WasmTierUpFunction, 1, 1)              \
   F(WasmTraceEnter, 0, 1)                  \
   F(WasmTraceExit, 1, 1)                   \
   F(WasmTraceMemory, 1, 1)
@@ -944,6 +954,7 @@ enum class OptimizationStatus {
   kTopmostFrameIsInterpreted = 1 << 16,
   kTopmostFrameIsBaseline = 1 << 17,
   kIsLazy = 1 << 18,
+  kTopmostFrameIsMaglev = 1 << 19,
 };
 
 }  // namespace internal

@@ -343,6 +343,9 @@ class V8_EXPORT_PRIVATE AccessorAssembler : public CodeStubAssembler {
                      LazyNode<TaggedIndex> lazy_slot, TNode<Context> context,
                      TypeofMode typeof_mode);
 
+  void GotoIfNotSameNumberBitPattern(TNode<Float64T> left,
+                                     TNode<Float64T> right, Label* miss);
+
   // IC dispatcher behavior.
 
   // Checks monomorphic case. Returns {feedback} entry of the vector.
@@ -496,7 +499,7 @@ class V8_EXPORT_PRIVATE AccessorAssembler : public CodeStubAssembler {
 
   // Low-level helpers.
 
-  using OnCodeHandler = std::function<void(TNode<CodeT> code_handler)>;
+  using OnCodeHandler = std::function<void(TNode<Code> code_handler)>;
   using OnFoundOnLookupStartObject = std::function<void(
       TNode<PropertyDictionary> properties, TNode<IntPtrT> name_index)>;
 
@@ -603,7 +606,7 @@ class ExitPoint {
 
   template <class... TArgs>
   void ReturnCallStub(const CallInterfaceDescriptor& descriptor,
-                      TNode<CodeT> target, TNode<Context> context,
+                      TNode<Code> target, TNode<Context> context,
                       TArgs... args) {
     if (IsDirect()) {
       asm_->TailCallStub(descriptor, target, context, args...);

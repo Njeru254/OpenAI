@@ -123,7 +123,10 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
 
   void Trap();
   void DebugBreak();
-
+#ifdef USE_SIMULATOR
+  // See src/codegen/riscv/base-constants-riscv.h DebugParameters.
+  void Debug(uint32_t parameters) { break_(parameters, false); }
+#endif
   // Calls Abort(msg) if the condition cc is not satisfied.
   // Use --debug_code to enable.
   void Assert(Condition cc, AbortReason reason, Register rs, Operand rt);
@@ -228,6 +231,30 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
     auipc(rd, Hi20);  // Read PC + Hi20 into scratch.
     jalr(rd, Lo12);   // jump PC + Hi20 + Lo12
   }
+
+  // Generate a B immediate instruction with the corresponding relocation info.
+  // 'offset' is the immediate to encode in the B instruction (so it is the
+  // difference between the target and the PC of the instruction, divided by
+  // the instruction size).
+  void near_jump(int offset, RelocInfo::Mode rmode) {
+    UseScratchRegisterScope temps(this);
+    Register temp = temps.Acquire();
+    if (!RelocInfo::IsNoInfo(rmode)) RecordRelocInfo(rmode, offset);
+    GenPCRelativeJump(temp, offset);
+  }
+  // Generate a BL immediate instruction with the corresponding relocation info.
+  // As for near_jump, 'offset' is the immediate to encode in the BL
+  // instruction.
+  void near_call(int offset, RelocInfo::Mode rmode) {
+    UseScratchRegisterScope temps(this);
+    Register temp = temps.Acquire();
+    if (!RelocInfo::IsNoInfo(rmode)) RecordRelocInfo(rmode, offset);
+    GenPCRelativeJumpAndLink(temp, offset);
+  }
+  // Generate a BL immediate instruction with the corresponding relocation info
+  // for the input HeapNumberRequest.
+  void near_call(HeapNumberRequest request) { UNIMPLEMENTED(); }
+
 // Jump, Call, and Ret pseudo instructions implementing inter-working.
 #define COND_ARGS                              \
   Condition cond = al, Register rs = zero_reg, \
@@ -246,16 +273,29 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
     return rmode != RelocInfo::EXTERNAL_REFERENCE;
   }
   void PatchAndJump(Address target);
-  void Jump(Handle<Code> code, RelocInfo::Mode rmode, COND_ARGS);
+  void Jump(Handle<CodeDataContainer> code, RelocInfo::Mode rmode, COND_ARGS);
   void Jump(const ExternalReference& reference);
   void Call(Register target, COND_ARGS);
   void Call(Address target, RelocInfo::Mode rmode, COND_ARGS);
-  void Call(Handle<Code> code, RelocInfo::Mode rmode = RelocInfo::CODE_TARGET,
-            COND_ARGS);
+  void Call(Handle<CodeDataContainer> code,
+            RelocInfo::Mode rmode = RelocInfo::CODE_TARGET, COND_ARGS);
   void Call(Label* target);
   void LoadAddress(
       Register dst, Label* target,
       RelocInfo::Mode rmode = RelocInfo::INTERNAL_REFERENCE_ENCODED);
+
+  // Load the code entry point from the CodeDataContainer object.
+  void LoadCodeDataContainerEntry(Register destination,
+                                  Register code_data_container_object);
+  // Load code entry point from the CodeDataContainer object and compute
+  // Code object pointer out of it. Must not be used for CodeDataContainers
+  // corresponding to builtins, because their entry points values point to
+  // the embedded instruction stream in .text section.
+  void LoadCodeDataContainerCodeNonBuiltin(Register destination,
+                                           Register code_data_container_object);
+  void CallCodeDataContainerObject(Register code_data_container_object);
+  void JumpCodeDataContainerObject(Register code_data_container_object,
+                                   JumpMode jump_mode = JumpMode::kJump);
 
   // Load the builtin given by the Smi in |builtin| into the same
   // register.
@@ -265,11 +305,6 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
   void CallBuiltinByIndex(Register builtin);
   void CallBuiltin(Builtin builtin);
   void TailCallBuiltin(Builtin builtin);
-
-  void LoadCodeObjectEntry(Register destination, Register code_object);
-  void CallCodeObject(Register code_object);
-  void JumpCodeObject(Register code_object,
-                      JumpMode jump_mode = JumpMode::kJump);
 
   // Generates an instruction sequence s.t. the return address points to the
   // instruction following the call.
@@ -1287,12 +1322,11 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
   // argc - argument count to be dropped by LeaveExitFrame.
   // save_doubles - saves FPU registers on stack.
   // stack_space - extra stack space.
-  void EnterExitFrame(bool save_doubles, int stack_space = 0,
+  void EnterExitFrame(int stack_space = 0,
                       StackFrame::Type frame_type = StackFrame::EXIT);
 
   // Leave the current exit frame.
-  void LeaveExitFrame(bool save_doubles, Register arg_count,
-                      bool do_return = NO_EMIT_RETURN,
+  void LeaveExitFrame(Register arg_count, bool do_return = NO_EMIT_RETURN,
                       bool argument_count_is_length = false);
 
   // Make sure the stack is aligned. Only emits code in debug mode.
@@ -1342,7 +1376,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
 
   // Tiering support.
   void AssertFeedbackVector(Register object,
-                            Register scratch) NOOP_UNLESS_DEBUG_CODE
+                            Register scratch) NOOP_UNLESS_DEBUG_CODE;
   void ReplaceClosureCodeWithOptimizedCode(Register optimized_code,
                                            Register closure);
   void GenerateTailCallToReturnedCode(Runtime::FunctionId function_id);
@@ -1364,20 +1398,17 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
   // Runtime calls.
 
   // Call a runtime routine.
-  void CallRuntime(const Runtime::Function* f, int num_arguments,
-                   SaveFPRegsMode save_doubles = SaveFPRegsMode::kIgnore);
+  void CallRuntime(const Runtime::Function* f, int num_arguments);
 
   // Convenience function: Same as above, but takes the fid instead.
-  void CallRuntime(Runtime::FunctionId fid,
-                   SaveFPRegsMode save_doubles = SaveFPRegsMode::kIgnore) {
+  void CallRuntime(Runtime::FunctionId fid) {
     const Runtime::Function* function = Runtime::FunctionForId(fid);
-    CallRuntime(function, function->nargs, save_doubles);
+    CallRuntime(function, function->nargs);
   }
 
   // Convenience function: Same as above, but takes the fid instead.
-  void CallRuntime(Runtime::FunctionId fid, int num_arguments,
-                   SaveFPRegsMode save_doubles = SaveFPRegsMode::kIgnore) {
-    CallRuntime(Runtime::FunctionForId(fid), num_arguments, save_doubles);
+  void CallRuntime(Runtime::FunctionId fid, int num_arguments) {
+    CallRuntime(Runtime::FunctionForId(fid), num_arguments);
   }
 
   // Convenience function: tail call a runtime routine (jump).
@@ -1452,8 +1483,9 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
                                        ArgumentsCountType type,
                                        ArgumentsCountMode mode,
                                        Register scratch = no_reg);
-  void JumpIfCodeTIsMarkedForDeoptimization(
-      Register codet, Register scratch, Label* if_marked_for_deoptimization);
+  void JumpIfCodeDataContainerIsMarkedForDeoptimization(
+      Register code_data_container, Register scratch,
+      Label* if_marked_for_deoptimization);
   Operand ClearedValue() const;
 
   // Jump if the register contains a non-smi.
@@ -1537,9 +1569,14 @@ void TurboAssembler::GenerateSwitchTable(Register index, size_t case_count,
 }
 
 struct MoveCycleState {
-  // Whether a move in the cycle needs the scratch or double scratch register.
-  bool pending_scratch_register_use = false;
-  bool pending_double_scratch_register_use = false;
+  // List of scratch registers reserved for pending moves in a move cycle, and
+  // which should therefore not be used as a temporary location by
+  // {MoveToTempLocation}.
+  RegList scratch_regs;
+  // Available scratch registers during the move cycle resolution scope.
+  base::Optional<UseScratchRegisterScope> temps;
+  // Scratch register picked by {MoveToTempLocation}.
+  base::Optional<Register> scratch_reg;
 };
 
 #define ACCESS_MASM(masm) masm->

@@ -1286,7 +1286,6 @@ class ParserBase {
   // a scope where the name has also been let bound or the var declaration is
   // hoisted over such a scope.
   void CheckConflictingVarDeclarations(DeclarationScope* scope) {
-    if (has_error()) return;
     bool allowed_catch_binding_var_redeclaration = false;
     Declaration* decl = scope->CheckConflictingVarDeclarations(
         &allowed_catch_binding_var_redeclaration);
@@ -2826,7 +2825,8 @@ typename ParserBase<Impl>::ExpressionT ParserBase<Impl>::ParseObjectLiteral() {
   // this runtime function. Here, we make sure that the number of
   // properties is less than number of arguments allowed for a runtime
   // call.
-  if (has_rest_property && properties.length() > Code::kMaxArguments) {
+  if (has_rest_property &&
+      properties.length() > InstructionStream::kMaxArguments) {
     expression_scope()->RecordPatternError(Scanner::Location(pos, position()),
                                            MessageTemplate::kTooManyArguments);
   }
@@ -2882,7 +2882,7 @@ void ParserBase<Impl>::ParseArguments(
     if (!Check(Token::COMMA)) break;
   }
 
-  if (args->length() > Code::kMaxArguments) {
+  if (args->length() > InstructionStream::kMaxArguments) {
     ReportMessage(MessageTemplate::kTooManyArguments);
     return;
   }
@@ -3929,7 +3929,7 @@ void ParserBase<Impl>::ParseFormalParameterList(FormalParametersT* parameters) {
   if (peek() != Token::RPAREN) {
     while (true) {
       // Add one since we're going to be adding a parameter.
-      if (parameters->arity + 1 > Code::kMaxArguments) {
+      if (parameters->arity + 1 > InstructionStream::kMaxArguments) {
         ReportMessage(MessageTemplate::kTooManyParameters);
         return;
       }
@@ -4317,6 +4317,8 @@ void ParserBase<Impl>::ParseFunctionBody(
     StatementListT* body, IdentifierT function_name, int pos,
     const FormalParametersT& parameters, FunctionKind kind,
     FunctionSyntaxKind function_syntax_kind, FunctionBodyType body_type) {
+  CheckStackOverflow();
+
   if (IsResumableFunction(kind)) impl()->PrepareGeneratorVariables();
 
   DeclarationScope* function_scope = parameters.scope;
@@ -4737,8 +4739,7 @@ typename ParserBase<Impl>::ExpressionT ParserBase<Impl>::ParseClassLiteral(
     if (Check(Token::SEMICOLON)) continue;
 
     // Either we're parsing a `static { }` initialization block or a property.
-    if (v8_flags.harmony_class_static_blocks && peek() == Token::STATIC &&
-        PeekAhead() == Token::LBRACE) {
+    if (peek() == Token::STATIC && PeekAhead() == Token::LBRACE) {
       BlockT static_block = ParseClassStaticBlock(&class_info);
       impl()->AddClassStaticBlock(static_block, &class_info);
       continue;

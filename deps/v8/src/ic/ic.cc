@@ -341,7 +341,7 @@ void IC::OnFeedbackChanged(Isolate* isolate, FeedbackVector vector,
   }
 #endif
 
-  isolate->tiering_manager()->NotifyICChanged();
+  isolate->tiering_manager()->NotifyICChanged(vector);
 }
 
 namespace {
@@ -837,6 +837,10 @@ void LoadIC::UpdateCaches(LookupIterator* lookup) {
       }
     }
     handler = ComputeHandler(lookup);
+    auto holder = lookup->GetHolder<Object>();
+    CHECK(*holder == *(lookup->lookup_start_object()) ||
+          LoadHandler::CanHandleHolderNotLookupStart(*handler.object()) ||
+          holder->IsJSPrimitiveWrapper());
   }
   // Can't use {lookup->name()} because the LookupIterator might be in
   // "elements" mode for keys that are strings representing integers above
@@ -1153,7 +1157,7 @@ MaybeObjectHandle LoadIC::ComputeHandler(LookupIterator* lookup) {
       UNREACHABLE();
   }
 
-  return MaybeObjectHandle(Handle<Code>::null());
+  return MaybeObjectHandle(Handle<InstructionStream>::null());
 }
 
 bool KeyedLoadIC::CanChangeToAllowOutOfBounds(Handle<Map> receiver_map) {

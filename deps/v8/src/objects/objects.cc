@@ -1168,9 +1168,7 @@ MaybeHandle<Object> Object::GetProperty(LookupIterator* it,
         return result;
       }
       case LookupIterator::WASM_OBJECT:
-        THROW_NEW_ERROR(it->isolate(),
-                        NewTypeError(MessageTemplate::kWasmObjectsAreOpaque),
-                        Object);
+        return it->isolate()->factory()->undefined_value();
       case LookupIterator::INTERCEPTOR: {
         bool done;
         Handle<Object> result;
@@ -2031,22 +2029,18 @@ void HeapObject::HeapObjectShortPrint(std::ostream& os) {
       os << ">";
       break;
     }
-    case CODE_DATA_CONTAINER_TYPE: {
-#ifdef V8_EXTERNAL_CODE_SPACE
-      CodeDataContainer code = CodeDataContainer::cast(*this);
-      os << "<CodeDataContainer " << CodeKindToString(code.kind());
+    case CODE_TYPE: {
+      Code code = Code::cast(*this);
+      os << "<Code " << CodeKindToString(code.kind());
       if (code.is_builtin()) {
         os << " " << Builtins::name(code.builtin_id());
       }
       os << ">";
-#else
-      os << "<CodeDataContainer>";
-#endif  // V8_EXTERNAL_CODE_SPACE
       break;
     }
-    case CODE_TYPE: {
-      Code code = Code::cast(*this);
-      os << "<Code " << CodeKindToString(code.kind());
+    case INSTRUCTION_STREAM_TYPE: {
+      InstructionStream code = InstructionStream::cast(*this);
+      os << "<InstructionStream " << CodeKindToString(code.kind());
       if (code.is_builtin()) {
         os << " " << Builtins::name(code.builtin_id());
       }
@@ -2286,8 +2280,8 @@ int HeapObject::SizeFromMap(Map map) const {
   TORQUE_INSTANCE_TYPE_TO_BODY_DESCRIPTOR_LIST(MAKE_TORQUE_SIZE_FOR)
 #undef MAKE_TORQUE_SIZE_FOR
 
-  if (instance_type == CODE_TYPE) {
-    return Code::unchecked_cast(*this).CodeSize();
+  if (instance_type == INSTRUCTION_STREAM_TYPE) {
+    return InstructionStream::unchecked_cast(*this).CodeSize();
   }
   if (instance_type == COVERAGE_INFO_TYPE) {
     return CoverageInfo::SizeFor(
@@ -2316,8 +2310,9 @@ bool HeapObject::NeedsRehashing(PtrComprCageBase cage_base) const {
 
 bool HeapObject::NeedsRehashing(InstanceType instance_type) const {
   if (V8_EXTERNAL_CODE_SPACE_BOOL) {
-    // Use map() only when it's guaranteed that it's not a Code object.
-    DCHECK_IMPLIES(instance_type != CODE_TYPE,
+    // Use map() only when it's guaranteed that it's not a InstructionStream
+    // object.
+    DCHECK_IMPLIES(instance_type != INSTRUCTION_STREAM_TYPE,
                    instance_type == map().instance_type());
   } else {
     DCHECK_EQ(instance_type, map().instance_type());
@@ -5874,7 +5869,7 @@ template <typename Derived, typename Shape>
 void HashTable<Derived, Shape>::Rehash(PtrComprCageBase cage_base) {
   DisallowGarbageCollection no_gc;
   WriteBarrierMode mode = GetWriteBarrierMode(no_gc);
-  ReadOnlyRoots roots = GetReadOnlyRoots(cage_base);
+  ReadOnlyRoots roots = EarlyGetReadOnlyRoots();
   uint32_t capacity = Capacity();
   bool done = false;
   for (int probe = 1; !done; probe++) {

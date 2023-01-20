@@ -219,8 +219,10 @@ bool DeleteObjectPropertyFast(Isolate* isolate, Handle<JSReceiver> receiver,
   // Finally, perform the map rollback.
   receiver->set_map(*parent_map, kReleaseStore);
 #if VERIFY_HEAP
-  receiver->HeapObjectVerify(isolate);
-  receiver->property_array().PropertyArrayVerify(isolate);
+  if (v8_flags.verify_heap) {
+    receiver->HeapObjectVerify(isolate);
+    receiver->property_array().PropertyArrayVerify(isolate);
+  }
 #endif
 
   // If the {descriptor} was "const" so far, we need to update the
@@ -1457,6 +1459,23 @@ RUNTIME_FUNCTION(Runtime_SetOwnPropertyIgnoreAttributes) {
 }
 
 RUNTIME_FUNCTION(Runtime_GetOwnPropertyDescriptor) {
+  HandleScope scope(isolate);
+
+  DCHECK_EQ(2, args.length());
+  Handle<JSReceiver> object = args.at<JSReceiver>(0);
+  Handle<Name> name = args.at<Name>(1);
+
+  PropertyDescriptor desc;
+  Maybe<bool> found =
+      JSReceiver::GetOwnPropertyDescriptor(isolate, object, name, &desc);
+  MAYBE_RETURN(found, ReadOnlyRoots(isolate).exception());
+
+  if (!found.FromJust()) return ReadOnlyRoots(isolate).undefined_value();
+  return *desc.ToObject(isolate);
+}
+
+// Returns a PropertyDescriptorObject (property-descriptor-object.h)
+RUNTIME_FUNCTION(Runtime_GetOwnPropertyDescriptorObject) {
   HandleScope scope(isolate);
 
   DCHECK_EQ(2, args.length());
